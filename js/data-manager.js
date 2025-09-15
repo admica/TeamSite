@@ -1,14 +1,21 @@
 /**
  * Data Manager - Core data architecture for TeamSite
- * Handles all data operations, validation, and persistence
+ * Handles all data operations, validation, and persistence via API
  */
 
 class DataManager {
     constructor() {
-        this.storageKey = 'teamsite_data';
+        this.apiBaseUrl = 'http://localhost:3000/api';
         this.version = '1.0.0';
-        this.data = this.loadData();
+        this.data = {
+            siteConfig: null,
+            teams: [],
+            players: []
+        };
         this.listeners = new Map();
+        this.isLoading = false;
+        this.retryCount = 0;
+        this.maxRetries = 3;
     }
 
     /**
@@ -124,41 +131,123 @@ class DataManager {
     }
 
     /**
-     * Load data from localStorage or return default
+     * Initialize data from API
      */
-    loadData() {
+    async initialize() {
+        if (this.isLoading) return;
+        this.isLoading = true;
+        
         try {
-            const stored = localStorage.getItem(this.storageKey);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                // Validate data structure
-                if (this.validateDataStructure(parsed)) {
-                    return parsed;
-                } else {
-                    console.warn('Stored data is invalid, using defaults');
-                    return this.getDefaultData();
-                }
-            }
+            await Promise.all([
+                this.loadSiteConfig(),
+                this.loadTeams(),
+                this.loadPlayers()
+            ]);
+            this.retryCount = 0;
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error initializing data:', error);
+            this.handleApiError(error);
+        } finally {
+            this.isLoading = false;
         }
-        return this.getDefaultData();
     }
 
     /**
-     * Save data to localStorage
+     * API utility methods
      */
-    saveData() {
+    async apiCall(endpoint, options = {}) {
+        const url = `${this.apiBaseUrl}${endpoint}`;
+        const config = {
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            },
+            ...options
+        };
+
         try {
-            this.data.lastUpdated = new Date().toISOString();
-            localStorage.setItem(this.storageKey, JSON.stringify(this.data));
-            this.notifyListeners('dataSaved', this.data);
-            return true;
+            const response = await fetch(url, config);
+            
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            return data;
         } catch (error) {
-            console.error('Error saving data:', error);
-            this.notifyListeners('dataSaveError', error);
-            return false;
+            console.error(`API call failed for ${endpoint}:`, error);
+            throw error;
         }
+    }
+
+    /**
+     * Handle API errors with retry logic
+     */
+    handleApiError(error) {
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            console.log(`Retrying API call (attempt ${this.retryCount}/${this.maxRetries})`);
+            setTimeout(() => this.initialize(), 1000 * this.retryCount);
+        } else {
+            console.error('Max retries reached, falling back to offline mode');
+            this.notifyListeners('apiError', { error: error.message });
+        }
+    }
+
+    /**
+     * Load site configuration from API
+     */
+    async loadSiteConfig() {
+        try {
+            const response = await this.apiCall('/config');
+            this.data.siteConfig = response.data || this.getDefaultSiteConfig();
+        } catch (error) {
+            console.warn('Failed to load site config, using default');
+            this.data.siteConfig = this.getDefaultSiteConfig();
+        }
+    }
+
+    /**
+     * Load teams from API
+     */
+    async loadTeams() {
+        try {
+            const response = await this.apiCall('/teams');
+            this.data.teams = response.data || [];
+        } catch (error) {
+            console.warn('Failed to load teams, using empty array');
+            this.data.teams = [];
+        }
+    }
+
+    /**
+     * Load players from API
+     */
+    async loadPlayers() {
+        try {
+            const response = await this.apiCall('/players');
+            this.data.players = response.data || [];
+        } catch (error) {
+            console.warn('Failed to load players, using empty array');
+            this.data.players = [];
+        }
+    }
+
+    /**
+     * Get default site configuration
+     */
+    getDefaultSiteConfig() {
+        return {
+            title: "Little League Champions",
+            description: "The future stars of baseball in our interactive 3D showcase",
+            primary_color: "#3b82f6",
+            secondary_color: "#10b981",
+            accent_color: "#f59e0b",
+            season_year: 2024,
+            start_date: "2024-04-06",
+            end_date: "2024-06-15",
+            all_star_date: "2024-05-18"
+        };
     }
 
     /**
@@ -227,29 +316,32 @@ class DataManager {
     /**
      * Add new player
      */
-    addPlayer(playerData) {
+    async addPlayer(playerData) {
         const validation = this.validatePlayer(playerData);
         if (!validation.valid) {
             throw new Error(`Player validation failed: ${validation.errors.join(', ')}`);
         }
 
-        const player = {
-            id: this.generateId('player'),
-            ...playerData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        this.data.players.push(player);
-        this.saveData();
-        this.notifyListeners('playerAdded', player);
-        return player;
+        try {
+            const response = await this.apiCall('/players', {
+                method: 'POST',
+                body: JSON.stringify(playerData)
+            });
+            
+            const player = response.data;
+            this.data.players.push(player);
+            this.notifyListeners('playerAdded', player);
+            return player;
+        } catch (error) {
+            console.error('Failed to add player:', error);
+            throw error;
+        }
     }
 
     /**
      * Update existing player
      */
-    updatePlayer(id, updates) {
+    async updatePlayer(id, updates) {
         const index = this.data.players.findIndex(player => player.id === id);
         if (index === -1) {
             throw new Error(`Player with ID ${id} not found`);
@@ -260,31 +352,44 @@ class DataManager {
             throw new Error(`Player validation failed: ${validation.errors.join(', ')}`);
         }
 
-        this.data.players[index] = {
-            ...this.data.players[index],
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-
-        this.saveData();
-        this.notifyListeners('playerUpdated', this.data.players[index]);
-        return this.data.players[index];
+        try {
+            const response = await this.apiCall(`/players/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+            
+            const updatedPlayer = response.data;
+            this.data.players[index] = updatedPlayer;
+            this.notifyListeners('playerUpdated', updatedPlayer);
+            return updatedPlayer;
+        } catch (error) {
+            console.error('Failed to update player:', error);
+            throw error;
+        }
     }
 
     /**
      * Delete player
      */
-    deletePlayer(id) {
+    async deletePlayer(id) {
         const index = this.data.players.findIndex(player => player.id === id);
         if (index === -1) {
             throw new Error(`Player with ID ${id} not found`);
         }
 
-        const player = this.data.players[index];
-        this.data.players.splice(index, 1);
-        this.saveData();
-        this.notifyListeners('playerDeleted', player);
-        return player;
+        try {
+            await this.apiCall(`/players/${id}`, {
+                method: 'DELETE'
+            });
+            
+            const player = this.data.players[index];
+            this.data.players.splice(index, 1);
+            this.notifyListeners('playerDeleted', player);
+            return player;
+        } catch (error) {
+            console.error('Failed to delete player:', error);
+            throw error;
+        }
     }
 
     /**
@@ -329,38 +434,46 @@ class DataManager {
         return this.data.teams.find(team => team.id === id);
     }
 
-    addTeam(teamData) {
-        const team = {
-            id: this.generateId('team'),
-            ...teamData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        this.data.teams.push(team);
-        this.saveData();
-        this.notifyListeners('teamAdded', team);
-        return team;
+    async addTeam(teamData) {
+        try {
+            const response = await this.apiCall('/teams', {
+                method: 'POST',
+                body: JSON.stringify(teamData)
+            });
+            
+            const team = response.data;
+            this.data.teams.push(team);
+            this.notifyListeners('teamAdded', team);
+            return team;
+        } catch (error) {
+            console.error('Failed to add team:', error);
+            throw error;
+        }
     }
 
-    updateTeam(id, updates) {
+    async updateTeam(id, updates) {
         const index = this.data.teams.findIndex(team => team.id === id);
         if (index === -1) {
             throw new Error(`Team with ID ${id} not found`);
         }
 
-        this.data.teams[index] = {
-            ...this.data.teams[index],
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-
-        this.saveData();
-        this.notifyListeners('teamUpdated', this.data.teams[index]);
-        return this.data.teams[index];
+        try {
+            const response = await this.apiCall(`/teams/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+            
+            const updatedTeam = response.data;
+            this.data.teams[index] = updatedTeam;
+            this.notifyListeners('teamUpdated', updatedTeam);
+            return updatedTeam;
+        } catch (error) {
+            console.error('Failed to update team:', error);
+            throw error;
+        }
     }
 
-    deleteTeam(id) {
+    async deleteTeam(id) {
         // Check if team has players
         const players = this.getPlayersByTeam(id);
         if (players.length > 0) {
@@ -372,11 +485,19 @@ class DataManager {
             throw new Error(`Team with ID ${id} not found`);
         }
 
-        const team = this.data.teams[index];
-        this.data.teams.splice(index, 1);
-        this.saveData();
-        this.notifyListeners('teamDeleted', team);
-        return team;
+        try {
+            await this.apiCall(`/teams/${id}`, {
+                method: 'DELETE'
+            });
+            
+            const team = this.data.teams[index];
+            this.data.teams.splice(index, 1);
+            this.notifyListeners('teamDeleted', team);
+            return team;
+        } catch (error) {
+            console.error('Failed to delete team:', error);
+            throw error;
+        }
     }
 
     // ===== SITE CONFIG OPERATIONS =====
@@ -385,15 +506,20 @@ class DataManager {
         return {...this.data.siteConfig};
     }
 
-    updateSiteConfig(updates) {
-        this.data.siteConfig = {
-            ...this.data.siteConfig,
-            ...updates,
-            updatedAt: new Date().toISOString()
-        };
-        this.saveData();
-        this.notifyListeners('siteConfigUpdated', this.data.siteConfig);
-        return this.data.siteConfig;
+    async updateSiteConfig(updates) {
+        try {
+            const response = await this.apiCall('/config', {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+            
+            this.data.siteConfig = response.data;
+            this.notifyListeners('siteConfigUpdated', this.data.siteConfig);
+            return this.data.siteConfig;
+        } catch (error) {
+            console.error('Failed to update site config:', error);
+            throw error;
+        }
     }
 
     // ===== UTILITY FUNCTIONS =====

@@ -157,8 +157,8 @@
             // Initialize feather icons
             feather.replace();
 
-            // Load players from data manager
-            loadPlayers();
+            // Initialize data manager and load data
+            initializeData();
 
             // Listen for data changes
             dataManager.addListener('playerAdded', updatePlayers);
@@ -169,6 +169,16 @@
             dataManager.addListener('teamDeleted', updatePlayers);
             dataManager.addListener('siteConfigUpdated', updateSiteContent);
         });
+
+        async function initializeData() {
+            try {
+                await dataManager.initialize();
+                loadPlayers();
+            } catch (error) {
+                console.error('Error initializing data:', error);
+                Utils.showNotification('Error loading data from server', 'error');
+            }
+        }
 
         function loadPlayers() {
             try {

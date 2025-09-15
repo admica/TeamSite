@@ -9,12 +9,12 @@ let currentEditingTeam = null;
 let colorPickers = {};
 
 // Initialize admin panel
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // Initialize feather icons
     feather.replace();
     
     // Load initial data
-    loadAllData();
+    await loadAllData();
     
     // Initialize event listeners
     initializeEventListeners();
@@ -60,11 +60,17 @@ function showTab(tabName) {
 }
 
 // Load all data
-function loadAllData() {
-    loadTeamsList();
-    loadPlayersList();
-    loadSettings();
-    loadDataStats();
+async function loadAllData() {
+    try {
+        await dataManager.initialize();
+        loadTeamsList();
+        loadPlayersList();
+        loadSettings();
+        loadDataStats();
+    } catch (error) {
+        console.error('Error loading data:', error);
+        Utils.showNotification('Error loading data from server', 'error');
+    }
 }
 
 // Initialize event listeners
@@ -215,13 +221,13 @@ function handlePlayerSubmit(e) {
     }
 }
 
-function savePlayer(playerData) {
+async function savePlayer(playerData) {
     try {
         if (currentEditingPlayer) {
-            dataManager.updatePlayer(currentEditingPlayer.id, playerData);
+            await dataManager.updatePlayer(currentEditingPlayer.id, playerData);
             Utils.showNotification('Player updated successfully!', 'success');
         } else {
-            dataManager.addPlayer(playerData);
+            await dataManager.addPlayer(playerData);
             Utils.showNotification('Player added successfully!', 'success');
         }
         closePlayerForm();
@@ -292,10 +298,10 @@ function loadPlayersList() {
 
 function deletePlayer(playerId) {
     Utils.confirm('Are you sure you want to delete this player? This action cannot be undone.', 'Delete Player')
-        .then(confirmed => {
+        .then(async (confirmed) => {
             if (confirmed) {
                 try {
-                    dataManager.deletePlayer(playerId);
+                    await dataManager.deletePlayer(playerId);
                     Utils.showNotification('Player deleted successfully!', 'success');
                 } catch (error) {
                     Utils.showNotification('Error deleting player: ' + error.message, 'error');
@@ -379,7 +385,7 @@ function populateTeamForm(team) {
     document.getElementById('teamDescription').value = team.description || '';
 }
 
-function handleTeamSubmit(e) {
+async function handleTeamSubmit(e) {
     e.preventDefault();
     clearFormErrors('teamForm');
     
@@ -392,10 +398,10 @@ function handleTeamSubmit(e) {
     
     try {
         if (currentEditingTeam) {
-            dataManager.updateTeam(currentEditingTeam.id, teamData);
+            await dataManager.updateTeam(currentEditingTeam.id, teamData);
             Utils.showNotification('Team updated successfully!', 'success');
         } else {
-            dataManager.addTeam(teamData);
+            await dataManager.addTeam(teamData);
             Utils.showNotification('Team added successfully!', 'success');
         }
         closeTeamForm();
@@ -448,10 +454,10 @@ function deleteTeam(teamId) {
     }
     
     Utils.confirm('Are you sure you want to delete this team? This action cannot be undone.', 'Delete Team')
-        .then(confirmed => {
+        .then(async (confirmed) => {
             if (confirmed) {
                 try {
-                    dataManager.deleteTeam(teamId);
+                    await dataManager.deleteTeam(teamId);
                     Utils.showNotification('Team deleted successfully!', 'success');
                 } catch (error) {
                     Utils.showNotification('Error deleting team: ' + error.message, 'error');
@@ -482,7 +488,7 @@ function loadSettings() {
     document.getElementById('allStarDate').value = Utils.formatDateForInput(config.season.allStarWeekend);
 }
 
-function handleSettingsSubmit(e) {
+async function handleSettingsSubmit(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
@@ -503,7 +509,7 @@ function handleSettingsSubmit(e) {
     };
     
     try {
-        dataManager.updateSiteConfig(settings);
+        await dataManager.updateSiteConfig(settings);
         Utils.showNotification('Settings saved successfully!', 'success');
     } catch (error) {
         Utils.showNotification('Error saving settings: ' + error.message, 'error');
