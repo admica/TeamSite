@@ -23,6 +23,53 @@ APACHE_SITES_DIR="/etc/apache2/sites-available"
 APACHE_SITES_ENABLED_DIR="/etc/apache2/sites-enabled"
 SITE_CONFIG_FILE="teamsite.conf"
 
+# Parse command line arguments
+FORCE_INSTALL=false
+if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+    FORCE_INSTALL=true
+    echo -e "${YELLOW}🔄 Force install mode enabled - reinstalling everything${NC}"
+    echo ""
+    
+    # Clean up existing installations
+    echo -e "${YELLOW}🧹 Cleaning up existing installation...${NC}"
+    
+    # Stop and remove backend service if it exists
+    if systemctl is-active --quiet teamsite-backend 2>/dev/null; then
+        echo -e "${YELLOW}Stopping existing backend service...${NC}"
+        sudo systemctl stop teamsite-backend
+    fi
+    
+    if [ -f "/etc/systemd/system/teamsite-backend.service" ]; then
+        echo -e "${YELLOW}Removing existing backend service...${NC}"
+        sudo systemctl disable teamsite-backend 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/teamsite-backend.service
+        sudo systemctl daemon-reload
+    fi
+    
+    # Remove existing Apache configuration
+    if [ -f "$APACHE_SITES_ENABLED_DIR/$SITE_CONFIG_FILE" ]; then
+        echo -e "${YELLOW}Removing existing Apache configuration...${NC}"
+        sudo a2dissite $SITE_CONFIG_FILE 2>/dev/null || true
+        sudo rm -f "$APACHE_SITES_AVAILABLE_DIR/$SITE_CONFIG_FILE"
+        sudo rm -f "$APACHE_SITES_ENABLED_DIR/$SITE_CONFIG_FILE"
+    fi
+    
+    # Remove existing web directory
+    if [ -d "$WEB_ROOT/$SITE_NAME" ]; then
+        echo -e "${YELLOW}Removing existing web directory...${NC}"
+        sudo rm -rf "$WEB_ROOT/$SITE_NAME"
+    fi
+    
+    # Remove existing database
+    if [ -f "$PROJECT_DIR/backend/teamsite.db" ]; then
+        echo -e "${YELLOW}Removing existing database...${NC}"
+        rm -f "$PROJECT_DIR/backend/teamsite.db"
+    fi
+    
+    echo -e "${GREEN}✅ Cleanup complete${NC}"
+    echo ""
+fi
+
 echo -e "${BLUE}🏗️  TeamSite Installation Script${NC}"
 echo "=================================="
 echo ""
@@ -77,11 +124,12 @@ if [ "$IS_UPDATE" = true ] && [ -L "$WEB_ROOT/$SITE_NAME" ]; then
     echo "Checking Apache2 configuration..."
     
     # Check if SSL is already configured
-    if [ -f "$APACHE_SITES_ENABLED_DIR/$SITE_CONFIG_FILE" ]; then
+    if [ -f "$APACHE_SITES_ENABLED_DIR/$SITE_CONFIG_FILE" ] && [ "$FORCE_INSTALL" = false ]; then
         echo -e "${GREEN}✅ Apache2 SSL configuration already exists${NC}"
         echo -e "${GREEN}✅ Site is available at: https://$SITE_DOMAIN/$SITE_NAME/${NC}"
         echo ""
         echo -e "${YELLOW}💡 Your site is already configured and up to date!${NC}"
+        echo -e "${YELLOW}💡 Use --force flag to reinstall everything: ./install.sh --force${NC}"
         exit 0
     fi
 fi
@@ -285,13 +333,144 @@ else
     exit 1
 fi
 
-# Test the installation
-echo -e "${YELLOW}🧪 Testing installation...${NC}"
-if curl -s -k -o /dev/null -w "%{http_code}" "https://$SITE_DOMAIN/$SITE_NAME/" | grep -q "200\|301\|302"; then
-    echo -e "${GREEN}✅ Site is accessible via HTTPS${NC}"
+# Setup Backend Server
+echo -e "${YELLOW}🔧 Setting up backend server...${NC}"
+
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo -e "${YELLOW}📦 Installing Node.js...${NC}"
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    echo -e "${GREEN}✅ Node.js installed${NC}"
 else
-    echo -e "${YELLOW}⚠️  Site might not be accessible yet (this is normal)${NC}"
+    echo -e "${GREEN}✅ Node.js already installed${NC}"
 fi
+
+# Install backend dependencies
+echo -e "${YELLOW}📦 Installing backend dependencies...${NC}"
+cd "$PROJECT_DIR/backend"
+if [ -f "package.json" ]; then
+    npm install --silent
+    echo -e "${GREEN}✅ Backend dependencies installed${NC}"
+else
+    echo -e "${RED}❌ Backend package.json not found${NC}"
+    exit 1
+fi
+
+# Create systemd service for backend
+echo -e "${YELLOW}🔧 Creating backend service...${NC}"
+sudo tee /etc/systemd/system/teamsite-backend.service > /dev/null <<EOF
+[Unit]
+Description=TeamSite Backend API Server
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR/backend
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the backend service
+sudo systemctl daemon-reload
+sudo systemctl enable teamsite-backend
+sudo systemctl start teamsite-backend
+
+# Wait for backend to start
+echo -e "${YELLOW}⏳ Waiting for backend to start...${NC}"
+sleep 5
+
+# Check if backend is running
+if systemctl is-active --quiet teamsite-backend; then
+    echo -e "${GREEN}✅ Backend server is running${NC}"
+else
+    echo -e "${RED}❌ Backend server failed to start${NC}"
+    echo -e "${YELLOW}Checking backend logs...${NC}"
+    sudo journalctl -u teamsite-backend --no-pager -n 10
+    exit 1
+fi
+
+# Test backend API
+echo -e "${YELLOW}🧪 Testing backend API...${NC}"
+if curl -s http://localhost:3000/api/health > /dev/null; then
+    echo -e "${GREEN}✅ Backend API is responding${NC}"
+else
+    echo -e "${YELLOW}⚠️  Backend API not responding yet (this is normal)${NC}"
+fi
+
+cd "$PROJECT_DIR"
+
+# Comprehensive end-to-end test
+echo -e "${YELLOW}🧪 Running comprehensive system test...${NC}"
+echo ""
+
+# Test 1: Backend API Health
+echo -e "${YELLOW}Testing backend API health...${NC}"
+if curl -s http://localhost:3000/api/health > /dev/null; then
+    echo -e "${GREEN}✅ Backend API health check passed${NC}"
+else
+    echo -e "${RED}❌ Backend API health check failed${NC}"
+    echo -e "${YELLOW}Backend logs:${NC}"
+    sudo journalctl -u teamsite-backend --no-pager -n 5
+    exit 1
+fi
+
+# Test 2: Backend API Data Endpoints
+echo -e "${YELLOW}Testing backend data endpoints...${NC}"
+if curl -s http://localhost:3000/api/players > /dev/null && \
+   curl -s http://localhost:3000/api/teams > /dev/null && \
+   curl -s http://localhost:3000/api/config > /dev/null; then
+    echo -e "${GREEN}✅ Backend data endpoints responding${NC}"
+else
+    echo -e "${RED}❌ Backend data endpoints failed${NC}"
+    exit 1
+fi
+
+# Test 3: Frontend HTTPS Access
+echo -e "${YELLOW}Testing frontend HTTPS access...${NC}"
+if curl -s -k -o /dev/null -w "%{http_code}" "https://$SITE_DOMAIN/$SITE_NAME/" | grep -q "200\|301\|302"; then
+    echo -e "${GREEN}✅ Frontend site accessible via HTTPS${NC}"
+else
+    echo -e "${RED}❌ Frontend site not accessible${NC}"
+    echo -e "${YELLOW}Apache status:${NC}"
+    sudo systemctl status apache2 --no-pager -l
+    exit 1
+fi
+
+# Test 4: Admin Panel Access
+echo -e "${YELLOW}Testing admin panel access...${NC}"
+if curl -s -k -o /dev/null -w "%{http_code}" "https://$SITE_DOMAIN/$SITE_NAME/admin.html" | grep -q "200"; then
+    echo -e "${GREEN}✅ Admin panel accessible${NC}"
+else
+    echo -e "${RED}❌ Admin panel not accessible${NC}"
+    exit 1
+fi
+
+# Test 5: Database Connectivity (via API)
+echo -e "${YELLOW}Testing database connectivity...${NC}"
+PLAYERS_RESPONSE=$(curl -s http://localhost:3000/api/players)
+if echo "$PLAYERS_RESPONSE" | grep -q "Jason Miller"; then
+    echo -e "${GREEN}✅ Database contains expected data${NC}"
+else
+    echo -e "${RED}❌ Database data not found${NC}"
+    echo -e "${YELLOW}Players API response:${NC}"
+    echo "$PLAYERS_RESPONSE"
+    exit 1
+fi
+
+echo ""
+echo -e "${GREEN}🎯 All system tests passed!${NC}"
+echo -e "${GREEN}✅ Backend API: Working${NC}"
+echo -e "${GREEN}✅ Frontend Site: Working${NC}"
+echo -e "${GREEN}✅ Admin Panel: Working${NC}"
+echo -e "${GREEN}✅ Database: Working${NC}"
+echo -e "${GREEN}✅ HTTPS: Working${NC}"
 
 echo ""
 echo -e "${GREEN}🎉 Installation Complete!${NC}"
@@ -324,3 +503,20 @@ echo "  • SSL certificate is self-signed - browsers will show a security warni
 echo "  • Click 'Advanced' and 'Proceed to localhost' to bypass the warning"
 echo ""
 echo -e "${GREEN}Happy coding! 🚀${NC}"
+echo ""
+echo -e "${BLUE}Backend Management Commands:${NC}"
+echo -e "  🔄 Restart backend: sudo systemctl restart teamsite-backend"
+echo -e "  📊 Check status: sudo systemctl status teamsite-backend"
+echo -e "  📋 View logs: sudo journalctl -u teamsite-backend -f"
+echo -e "  🛑 Stop backend: sudo systemctl stop teamsite-backend"
+echo -e "  ▶️  Start backend: sudo systemctl start teamsite-backend"
+echo ""
+echo -e "${BLUE}Reinstall Commands:${NC}"
+echo -e "  🔄 Force reinstall: ./install.sh --force"
+echo -e "  🔄 Force reinstall: ./install.sh -f"
+echo ""
+echo -e "${BLUE}API Endpoints:${NC}"
+echo -e "  🔍 Health check: http://localhost:3000/api/health"
+echo -e "  👥 Players API: http://localhost:3000/api/players"
+echo -e "  🏟️  Teams API: http://localhost:3000/api/teams"
+echo -e "  ⚙️  Config API: http://localhost:3000/api/config"
