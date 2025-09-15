@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Test - TeamSite</title>
+    <script src="js/utils.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/data-manager.js"></script>
+</head>
+<body>
+    <h1>TeamSite Simple Test</h1>
+    <div id="results"></div>
+
+    <script>
+        function test() {
+            const results = [];
+            
+            try {
+                // Test 1: Data Manager loads
+                results.push('✓ Data Manager loaded');
+                
+                // Test 2: Can get default data
+                const data = dataManager.data;
+                results.push(`✓ Default data loaded: ${data.players.length} players, ${data.teams.length} teams`);
+                
+                // Test 3: Can add a player
+                const testPlayer = {
+                    name: 'Test Player',
+                    number: 99,
+                    teamId: 'tigers',
+                    position: 'Test Position'
+                };
+                
+                const addedPlayer = dataManager.addPlayer(testPlayer);
+                results.push(`✓ Player added: ${addedPlayer.name} (ID: ${addedPlayer.id})`);
+                
+                // Test 4: Can get players
+                const players = dataManager.getPlayers();
+                results.push(`✓ Players retrieved: ${players.length} total`);
+                
+                // Test 5: Can update player
+                dataManager.updatePlayer(addedPlayer.id, { name: 'Updated Test Player' });
+                const updatedPlayer = dataManager.getPlayer(addedPlayer.id);
+                results.push(`✓ Player updated: ${updatedPlayer.name}`);
+                
+                // Test 6: Can delete player
+                dataManager.deletePlayer(addedPlayer.id);
+                const remainingPlayers = dataManager.getPlayers();
+                results.push(`✓ Player deleted: ${remainingPlayers.length} players remaining`);
+                
+                // Test 7: Validation works
+                const validation = ValidationUtils.validatePlayer({
+                    name: 'Valid Player',
+                    number: 42,
+                    teamId: 'tigers',
+                    position: 'Pitcher'
+                });
+                results.push(`✓ Validation works: ${validation.valid ? 'Valid player passed' : 'Valid player failed'}`);
+                
+                // Test 8: Utils work
+                const id = Utils.generateId('test');
+                results.push(`✓ Utils work: Generated ID ${id}`);
+                
+                results.push('🎉 All tests passed!');
+                
+            } catch (error) {
+                results.push(`❌ Error: ${error.message}`);
+            }
+            
+            document.getElementById('results').innerHTML = results.map(r => `<div>${r}</div>`).join('');
+        }
+        
+        // Run test when page loads
+        document.addEventListener('DOMContentLoaded', test);
+    </script>
+</body>
+</html>

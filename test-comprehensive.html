@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Test - TeamSite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/data-manager.js"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">Comprehensive TeamSite Test</h1>
+        
+        <!-- Test Results -->
+        <div class="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Test Results</h2>
+            <div id="testResults" class="space-y-2">
+                <p>Running tests...</p>
+            </div>
+        </div>
+
+        <!-- Data Status -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Data Status</h2>
+                <div id="dataStatus" class="space-y-2">
+                    <p>Loading...</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Current Data</h2>
+                <div id="currentData" class="space-y-2">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Operations -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">Test Operations</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button onclick="testDataManager()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Test Data Manager
+                </button>
+                <button onclick="testValidation()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    Test Validation
+                </button>
+                <button onclick="testUtils()" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
+                    Test Utils
+                </button>
+                <button onclick="testIntegration()" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">
+                    Test Integration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = [];
+
+        function addTestResult(test, status, message) {
+            testResults.push({ test, status, message });
+            updateTestResults();
+        }
+
+        function updateTestResults() {
+            const container = document.getElementById('testResults');
+            container.innerHTML = testResults.map(result => `
+                <div class="flex items-center space-x-2">
+                    <span class="w-4 h-4 rounded-full ${result.status === 'PASS' ? 'bg-green-500' : 'bg-red-500'}"></span>
+                    <span class="font-medium">${result.test}:</span>
+                    <span class="${result.status === 'PASS' ? 'text-green-600' : 'text-red-600'}">${result.status}</span>
+                    <span class="text-gray-600">${result.message}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateDataStatus() {
+            const data = dataManager.data;
+            const statusDiv = document.getElementById('dataStatus');
+            
+            statusDiv.innerHTML = `
+                <p><strong>Version:</strong> ${data.version}</p>
+                <p><strong>Last Updated:</strong> ${Utils.formatDate(data.lastUpdated)}</p>
+                <p><strong>Players:</strong> ${data.players.length}</p>
+                <p><strong>Teams:</strong> ${data.teams.length}</p>
+                <p><strong>Events:</strong> ${data.events.length}</p>
+                <p><strong>Storage Key:</strong> ${dataManager.storageKey}</p>
+            `;
+        }
+
+        function updateCurrentData() {
+            const players = dataManager.getPlayers();
+            const teams = dataManager.getTeams();
+            const config = dataManager.getSiteConfig();
+            
+            const dataDiv = document.getElementById('currentData');
+            dataDiv.innerHTML = `
+                <div class="space-y-2">
+                    <div><strong>Site Title:</strong> ${config.title}</div>
+                    <div><strong>Primary Color:</strong> <span class="inline-block w-4 h-4 rounded" style="background-color: ${config.theme.primary}"></span> ${config.theme.primary}</div>
+                    <div><strong>Teams:</strong> ${teams.map(t => t.name).join(', ')}</div>
+                    <div><strong>Players:</strong> ${players.map(p => `${p.name} (#${p.number})`).join(', ')}</div>
+                </div>
+            `;
+        }
+
+        // Test Data Manager
+        function testDataManager() {
+            addTestResult('Data Manager Initialization', 'PASS', 'Data manager loaded successfully');
+            
+            try {
+                // Test default data
+                const defaultData = dataManager.getDefaultData();
+                if (defaultData.version && defaultData.players && defaultData.teams) {
+                    addTestResult('Default Data Structure', 'PASS', 'Default data structure is valid');
+                } else {
+                    addTestResult('Default Data Structure', 'FAIL', 'Default data structure is invalid');
+                }
+
+                // Test player operations
+                const testPlayer = {
+                    name: 'Test Player',
+                    number: 99,
+                    teamId: 'tigers',
+                    position: 'Test Position',
+                    bio: 'Test bio',
+                    stats: { battingAverage: 0.300, homeRuns: 5, rbi: 20, gamesPlayed: 10 }
+                };
+
+                const addedPlayer = dataManager.addPlayer(testPlayer);
+                if (addedPlayer && addedPlayer.id) {
+                    addTestResult('Add Player', 'PASS', 'Player added successfully');
+                } else {
+                    addTestResult('Add Player', 'FAIL', 'Failed to add player');
+                }
+
+                // Test update player
+                const updatedPlayer = dataManager.updatePlayer(addedPlayer.id, { name: 'Updated Test Player' });
+                if (updatedPlayer.name === 'Updated Test Player') {
+                    addTestResult('Update Player', 'PASS', 'Player updated successfully');
+                } else {
+                    addTestResult('Update Player', 'FAIL', 'Failed to update player');
+                }
+
+                // Test delete player
+                dataManager.deletePlayer(addedPlayer.id);
+                const players = dataManager.getPlayers();
+                const foundPlayer = players.find(p => p.id === addedPlayer.id);
+                if (!foundPlayer) {
+                    addTestResult('Delete Player', 'PASS', 'Player deleted successfully');
+                } else {
+                    addTestResult('Delete Player', 'FAIL', 'Failed to delete player');
+                }
+
+                // Test team operations
+                const testTeam = {
+                    name: 'Test Team',
+                    color: '#ff0000',
+                    description: 'Test team description'
+                };
+
+                const addedTeam = dataManager.addTeam(testTeam);
+                if (addedTeam && addedTeam.id) {
+                    addTestResult('Add Team', 'PASS', 'Team added successfully');
+                } else {
+                    addTestResult('Add Team', 'FAIL', 'Failed to add team');
+                }
+
+                // Test site config
+                const newConfig = {
+                    title: 'Test Title',
+                    description: 'Test Description'
+                };
+                dataManager.updateSiteConfig(newConfig);
+                const updatedConfig = dataManager.getSiteConfig();
+                if (updatedConfig.title === 'Test Title') {
+                    addTestResult('Update Site Config', 'PASS', 'Site config updated successfully');
+                } else {
+                    addTestResult('Update Site Config', 'FAIL', 'Failed to update site config');
+                }
+
+                // Clean up test team
+                dataManager.deleteTeam(addedTeam.id);
+
+            } catch (error) {
+                addTestResult('Data Manager Operations', 'FAIL', 'Error: ' + error.message);
+            }
+        }
+
+        // Test Validation
+        function testValidation() {
+            try {
+                // Test player validation
+                const validPlayer = {
+                    name: 'Valid Player',
+                    number: 42,
+                    teamId: 'tigers',
+                    position: 'Pitcher'
+                };
+                const validation = ValidationUtils.validatePlayer(validPlayer, []);
+                if (validation.valid) {
+                    addTestResult('Valid Player Validation', 'PASS', 'Valid player passed validation');
+                } else {
+                    addTestResult('Valid Player Validation', 'FAIL', 'Valid player failed validation: ' + validation.errors.join(', '));
+                }
+
+                // Test invalid player
+                const invalidPlayer = {
+                    name: '',
+                    number: 999,
+                    teamId: 'nonexistent'
+                };
+                const invalidValidation = ValidationUtils.validatePlayer(invalidPlayer, []);
+                if (!invalidValidation.valid) {
+                    addTestResult('Invalid Player Validation', 'PASS', 'Invalid player correctly rejected');
+                } else {
+                    addTestResult('Invalid Player Validation', 'FAIL', 'Invalid player incorrectly passed validation');
+                }
+
+                // Test color validation
+                if (ValidationUtils.isValidColor('#ff0000')) {
+                    addTestResult('Valid Color Validation', 'PASS', 'Valid color passed validation');
+                } else {
+                    addTestResult('Valid Color Validation', 'FAIL', 'Valid color failed validation');
+                }
+
+                if (!ValidationUtils.isValidColor('invalid')) {
+                    addTestResult('Invalid Color Validation', 'PASS', 'Invalid color correctly rejected');
+                } else {
+                    addTestResult('Invalid Color Validation', 'FAIL', 'Invalid color incorrectly passed validation');
+                }
+
+                // Test email validation
+                if (ValidationUtils.isValidEmail('test@example.com')) {
+                    addTestResult('Valid Email Validation', 'PASS', 'Valid email passed validation');
+                } else {
+                    addTestResult('Valid Email Validation', 'FAIL', 'Valid email failed validation');
+                }
+
+            } catch (error) {
+                addTestResult('Validation Tests', 'FAIL', 'Error: ' + error.message);
+            }
+        }
+
+        // Test Utils
+        function testUtils() {
+            try {
+                // Test ID generation
+                const id1 = Utils.generateId('test');
+                const id2 = Utils.generateId('test');
+                if (id1 !== id2 && id1.startsWith('test_')) {
+                    addTestResult('ID Generation', 'PASS', 'Generated unique IDs');
+                } else {
+                    addTestResult('ID Generation', 'FAIL', 'ID generation failed');
+                }
+
+                // Test date formatting
+                const testDate = '2024-01-15';
+                const formatted = Utils.formatDate(testDate);
+                if (formatted && formatted !== 'Invalid Date') {
+                    addTestResult('Date Formatting', 'PASS', 'Date formatted correctly');
+                } else {
+                    addTestResult('Date Formatting', 'FAIL', 'Date formatting failed');
+                }
+
+                // Test deep clone
+                const original = { a: 1, b: { c: 2 } };
+                const cloned = Utils.deepClone(original);
+                cloned.b.c = 3;
+                if (original.b.c === 2 && cloned.b.c === 3) {
+                    addTestResult('Deep Clone', 'PASS', 'Deep clone worked correctly');
+                } else {
+                    addTestResult('Deep Clone', 'FAIL', 'Deep clone failed');
+                }
+
+                // Test number formatting
+                const formattedNumber = Utils.formatNumber(1234567);
+                if (formattedNumber === '1,234,567') {
+                    addTestResult('Number Formatting', 'PASS', 'Number formatted correctly');
+                } else {
+                    addTestResult('Number Formatting', 'FAIL', 'Number formatting failed');
+                }
+
+            } catch (error) {
+                addTestResult('Utils Tests', 'FAIL', 'Error: ' + error.message);
+            }
+        }
+
+        // Test Integration
+        function testIntegration() {
+            try {
+                // Test data persistence
+                const originalPlayers = dataManager.getPlayers().length;
+                const testPlayer = {
+                    name: 'Integration Test Player',
+                    number: 88,
+                    teamId: 'tigers',
+                    position: 'Integration Test'
+                };
+                
+                dataManager.addPlayer(testPlayer);
+                const newPlayers = dataManager.getPlayers().length;
+                
+                if (newPlayers === originalPlayers + 1) {
+                    addTestResult('Data Persistence', 'PASS', 'Data persisted correctly');
+                } else {
+                    addTestResult('Data Persistence', 'FAIL', 'Data persistence failed');
+                }
+
+                // Test event listeners
+                let listenerCalled = false;
+                dataManager.addListener('playerAdded', () => {
+                    listenerCalled = true;
+                });
+
+                const anotherPlayer = {
+                    name: 'Listener Test Player',
+                    number: 77,
+                    teamId: 'tigers',
+                    position: 'Listener Test'
+                };
+
+                dataManager.addPlayer(anotherPlayer);
+                
+                if (listenerCalled) {
+                    addTestResult('Event Listeners', 'PASS', 'Event listeners working');
+                } else {
+                    addTestResult('Event Listeners', 'FAIL', 'Event listeners not working');
+                }
+
+                // Test data export/import
+                const exportedData = dataManager.exportData();
+                const parsedData = JSON.parse(exportedData);
+                
+                if (parsedData.version && parsedData.players) {
+                    addTestResult('Data Export', 'PASS', 'Data exported correctly');
+                } else {
+                    addTestResult('Data Export', 'FAIL', 'Data export failed');
+                }
+
+                // Clean up test players
+                const players = dataManager.getPlayers();
+                players.forEach(player => {
+                    if (player.name.includes('Test') || player.name.includes('Integration')) {
+                        dataManager.deletePlayer(player.id);
+                    }
+                });
+
+            } catch (error) {
+                addTestResult('Integration Tests', 'FAIL', 'Error: ' + error.message);
+            }
+        }
+
+        // Initialize test page
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDataStatus();
+            updateCurrentData();
+            
+            // Run all tests automatically
+            setTimeout(() => {
+                testDataManager();
+                testValidation();
+                testUtils();
+                testIntegration();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

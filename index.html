@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little League Champions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <!-- Core Data Management -->
+    <script src="js/utils.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/data-manager.js"></script>
+    <style>
+        .grading-slab {
+            background: rgba(255, 255, 255, 0.8);
+            border: 15px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.2), 
+                        inset 0 0 20px rgba(255, 255, 255, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        .grading-slab::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.4) 0%,
+                rgba(255, 255, 255, 0) 20%,
+                rgba(255, 255, 255, 0) 80%,
+                rgba(255, 255, 255, 0.4) 100%
+            );
+            pointer-events: none;
+        }
+        .card-front {
+            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+            border-radius: 15px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        .team-name {
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            letter-spacing: 1px;
+        }
+        .player-number {
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+        }
+        #card-carousel {
+            height: 70vh;
+            width: 100%;
+        }
+        .grading-label {
+            background: linear-gradient(to right, #f8f8f8, #e0e0e0);
+            border-radius: 5px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-gray-100 min-h-screen">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <i data-feather="home" class="text-blue-600"></i>
+                    <span class="font-bold text-blue-600 text-xl">Little League Champions</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#" class="text-gray-800 hover:text-blue-600 transition">Home</a>
+                    <a href="admin.html" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center">
+                        <i data-feather="lock" class="mr-2"></i> Admin
+                    </a>
+                </div>
+                <div class="md:hidden">
+                    <button class="mobile-menu-button">
+                        <i data-feather="menu"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-12">
+        <div class="text-center mb-12" data-aos="fade-up">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Meet Our Team</h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">The future stars of baseball in our interactive 3D showcase</p>
+        </div>
+
+        <div id="card-carousel" class="mb-16"></div>
+
+        <div class="text-center" data-aos="fade-up">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">2024 Season Schedule</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold text-blue-600 mb-2">Opening Day</h3>
+                    <p class="text-gray-600">April 6, 2024</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold text-blue-600 mb-2">Championship Game</h3>
+                    <p class="text-gray-600">June 15, 2024</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h3 class="font-bold text-blue-600 mb-2">All-Star Weekend</h3>
+                    <p class="text-gray-600">May 18-19, 2024</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <h3 class="text-2xl font-bold mb-4">Little League Champions</h3>
+                    <p class="text-gray-400">Developing tomorrow's baseball stars today</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i data-feather="facebook"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i data-feather="twitter"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i data-feather="instagram"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2024 Little League Champions. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Get players from data manager
+        let players = [];
+
+        // Initialize 3D carousel
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize AOS animations
+            AOS.init({
+                duration: 800,
+                easing: 'ease-in-out',
+                once: true
+            });
+
+            // Initialize feather icons
+            feather.replace();
+
+            // Load players from data manager
+            loadPlayers();
+
+            // Listen for data changes
+            dataManager.addListener('playerAdded', updatePlayers);
+            dataManager.addListener('playerUpdated', updatePlayers);
+            dataManager.addListener('playerDeleted', updatePlayers);
+            dataManager.addListener('teamAdded', updatePlayers);
+            dataManager.addListener('teamUpdated', updatePlayers);
+            dataManager.addListener('teamDeleted', updatePlayers);
+            dataManager.addListener('siteConfigUpdated', updateSiteContent);
+        });
+
+        function loadPlayers() {
+            try {
+                players = dataManager.getPlayers();
+                updateSiteContent();
+                init3DCarousel();
+            } catch (error) {
+                console.error('Error loading players:', error);
+                Utils.showNotification('Error loading player data', 'error');
+            }
+        }
+
+        function updatePlayers() {
+            loadPlayers();
+        }
+
+        function updateSiteContent() {
+            // Update site title and description from config
+            const config = dataManager.getSiteConfig();
+            document.title = config.title;
+            document.querySelector('h1').textContent = `Meet Our Team`;
+            document.querySelector('p').textContent = config.description;
+
+            // Update season schedule
+            updateSeasonSchedule(config.season);
+        }
+
+        function updateSeasonSchedule(season) {
+            const scheduleContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+            if (scheduleContainer && season) {
+                scheduleContainer.innerHTML = `
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <h3 class="font-bold text-blue-600 mb-2">Opening Day</h3>
+                        <p class="text-gray-600">${Utils.formatDate(season.startDate)}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <h3 class="font-bold text-blue-600 mb-2">Championship Game</h3>
+                        <p class="text-gray-600">${Utils.formatDate(season.endDate)}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <h3 class="font-bold text-blue-600 mb-2">All-Star Weekend</h3>
+                        <p class="text-gray-600">${Utils.formatDate(season.allStarWeekend)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function init3DCarousel() {
+            const container = document.getElementById('card-carousel');
+            
+            // Clear existing content
+            container.innerHTML = '';
+            
+            // Scene setup
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+
+            // Create cards
+            const cards = [];
+            const radius = 5;
+            
+            players.forEach((player, index) => {
+                const angle = (index / players.length) * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                
+                // Create card geometry
+                const card = createCard(player);
+                card.position.set(x, 0, z);
+                card.lookAt(0, 0, 0);
+                
+                scene.add(card);
+                cards.push(card);
+            });
+
+            // Camera position
+            camera.position.z = 8;
+
+            // Controls
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 1;
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function createCard(player) {
+            // Card dimensions
+            const width = 2.5;
+            const height = 3.5;
+            const depth = 0.05;
+            
+            // Create card group
+            const cardGroup = new THREE.Group();
+            
+            // Get team info for styling
+            const team = dataManager.getTeam(player.teamId);
+            const teamColor = team ? parseInt(team.color.replace('#', '0x')) : 0x3b82f6;
+            
+            // Card front with fallback image
+            const cardGeometry = new THREE.BoxGeometry(width, height, depth);
+            let cardMaterial;
+            
+            if (player.image && ValidationUtils.isValidImageUrl(player.image)) {
+                const textureLoader = new THREE.TextureLoader();
+                textureLoader.load(
+                    player.image,
+                    (texture) => {
+                        cardMaterial.map = texture;
+                        cardMaterial.needsUpdate = true;
+                    },
+                    undefined,
+                    (error) => {
+                        console.warn('Failed to load player image:', error);
+                        // Use fallback color
+                        cardMaterial.color.setHex(teamColor);
+                    }
+                );
+                cardMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0xffffff,
+                    side: THREE.DoubleSide
+                });
+            } else {
+                // Fallback to team color
+                cardMaterial = new THREE.MeshPhongMaterial({ 
+                    color: teamColor,
+                    side: THREE.DoubleSide
+                });
+            }
+            
+            const cardMesh = new THREE.Mesh(cardGeometry, cardMaterial);
+            cardGroup.add(cardMesh);
+            
+            // Add player info as text (simplified for now)
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 256, 256);
+            
+            // Player name
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.name, 128, 100);
+            
+            // Player number
+            ctx.font = 'bold 48px Arial';
+            ctx.fillText(`#${player.number}`, 128, 160);
+            
+            // Position
+            ctx.font = '16px Arial';
+            ctx.fillText(player.position || 'Player', 128, 200);
+            
+            const textTexture = new THREE.CanvasTexture(canvas);
+            const textMaterial = new THREE.MeshPhongMaterial({ 
+                map: textTexture,
+                side: THREE.DoubleSide
+            });
+            
+            // Create a separate plane for text
+            const textGeometry = new THREE.PlaneGeometry(width * 0.8, height * 0.3);
+            const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+            textMesh.position.z = depth / 2 + 0.01;
+            cardGroup.add(textMesh);
+            
+            // Card border (grading slab effect)
+            const borderGeometry = new THREE.BoxGeometry(width * 1.1, height * 1.1, depth * 1.2);
+            const borderMaterial = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.3,
+                specular: 0xffffff,
+                shininess: 100
+            });
+            const borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
+            cardGroup.add(borderMesh);
+            
+            return cardGroup;
+        }
+    </script>
+</body>
+</html>
