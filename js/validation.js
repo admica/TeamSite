@@ -32,6 +32,8 @@ class ValidationUtils {
 
         if (!player.position || player.position.trim().length === 0) {
             errors.push('Player position is required');
+        } else if (player.position.trim().length > 100) {
+            errors.push('Player position must be 100 characters or less');
         }
 
         // Check for duplicate numbers

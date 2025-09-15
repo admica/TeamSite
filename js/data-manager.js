@@ -412,6 +412,12 @@ class DataManager {
             errors.push('Team does not exist');
         }
         
+        if (!player.position || player.position.trim().length === 0) {
+            errors.push('Position is required');
+        } else if (player.position.trim().length > 100) {
+            errors.push('Position must be 100 characters or less');
+        }
+        
         // Check for duplicate numbers (exclude current player if updating)
         const playersToCheck = existingPlayers || this.data.players;
         if (player.number && playersToCheck.some(p => p.number === player.number && p.id !== player.id)) {
