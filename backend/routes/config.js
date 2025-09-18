@@ -5,6 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../auth');
 
 // Get site configuration
 router.get('/', async (req, res) => {
@@ -51,7 +52,7 @@ router.get('/', async (req, res) => {
 });
 
 // Update site configuration
-router.put('/', async (req, res) => {
+router.put('/', requireAuth, async (req, res) => {
     try {
         const { title, description, theme, season } = req.body;
         

@@ -6,6 +6,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { authRouter, requireAuth } = require('./auth');
 const Database = require('./database');
 
 // Import routes
@@ -22,11 +23,14 @@ const db = new Database();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' })); // Increased limit for image uploads
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Auth routes
+app.use('/api/auth', authRouter);
 
 // Routes
 app.use('/api/players', playersRoutes);

@@ -5,22 +5,38 @@
 
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../auth');
 
 // Get all players
 router.get('/', async (req, res) => {
     try {
         const db = req.app.locals.db;
-        const players = await db.all(`
+        const rows = await db.all(`
             SELECT p.*, t.name as team_name, t.color as team_color
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             ORDER BY p.name
         `);
-        
-        res.json({
-            success: true,
-            data: players
-        });
+        // Map DB shape -> API shape
+        const players = rows.map(r => ({
+            id: r.id,
+            name: r.name,
+            number: r.number,
+            teamId: r.team_id,
+            position: r.position,
+            image: r.image_path,
+            bio: r.bio,
+            battingAverage: r.batting_average,
+            homeRuns: r.home_runs,
+            rbi: r.rbi,
+            gamesPlayed: r.games_played,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            team_name: r.team_name,
+            team_color: r.team_color
+        }));
+
+        res.json({ success: true, data: players });
     } catch (error) {
         res.status(500).json({
             error: true,
@@ -34,25 +50,39 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const db = req.app.locals.db;
-        const player = await db.get(`
+        const r = await db.get(`
             SELECT p.*, t.name as team_name, t.color as team_color
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             WHERE p.id = ?
         `, [req.params.id]);
         
-        if (!player) {
+        if (!r) {
             return res.status(404).json({
                 error: true,
                 message: 'Player not found',
                 code: 'PLAYER_NOT_FOUND'
             });
         }
-        
-        res.json({
-            success: true,
-            data: player
-        });
+        const player = {
+            id: r.id,
+            name: r.name,
+            number: r.number,
+            teamId: r.team_id,
+            position: r.position,
+            image: r.image_path,
+            bio: r.bio,
+            battingAverage: r.batting_average,
+            homeRuns: r.home_runs,
+            rbi: r.rbi,
+            gamesPlayed: r.games_played,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            team_name: r.team_name,
+            team_color: r.team_color
+        };
+
+        res.json({ success: true, data: player });
     } catch (error) {
         res.status(500).json({
             error: true,
@@ -63,7 +93,8 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new player
-router.post('/', async (req, res) => {
+// Protected by requireAuth defined in server
+router.post('/', requireAuth, async (req, res) => {
     try {
         const { name, number, teamId, position, image, bio, stats } = req.body;
         
@@ -113,17 +144,31 @@ router.post('/', async (req, res) => {
         ]);
         
         // Get the created player
-        const newPlayer = await db.get(`
+        const r = await db.get(`
             SELECT p.*, t.name as team_name, t.color as team_color
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             WHERE p.id = ?
         `, [id]);
-        
-        res.status(201).json({
-            success: true,
-            data: newPlayer
-        });
+        const newPlayer = {
+            id: r.id,
+            name: r.name,
+            number: r.number,
+            teamId: r.team_id,
+            position: r.position,
+            image: r.image_path,
+            bio: r.bio,
+            battingAverage: r.batting_average,
+            homeRuns: r.home_runs,
+            rbi: r.rbi,
+            gamesPlayed: r.games_played,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            team_name: r.team_name,
+            team_color: r.team_color
+        };
+
+        res.status(201).json({ success: true, data: newPlayer });
     } catch (error) {
         res.status(500).json({
             error: true,
@@ -134,7 +179,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update player
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
     try {
         const { name, number, teamId, position, image, bio, stats } = req.body;
         
@@ -187,17 +232,31 @@ router.put('/:id', async (req, res) => {
         ]);
         
         // Get updated player
-        const updatedPlayer = await db.get(`
+        const r2 = await db.get(`
             SELECT p.*, t.name as team_name, t.color as team_color
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             WHERE p.id = ?
         `, [req.params.id]);
-        
-        res.json({
-            success: true,
-            data: updatedPlayer
-        });
+        const updatedPlayer = {
+            id: r2.id,
+            name: r2.name,
+            number: r2.number,
+            teamId: r2.team_id,
+            position: r2.position,
+            image: r2.image_path,
+            bio: r2.bio,
+            battingAverage: r2.batting_average,
+            homeRuns: r2.home_runs,
+            rbi: r2.rbi,
+            gamesPlayed: r2.games_played,
+            createdAt: r2.created_at,
+            updatedAt: r2.updated_at,
+            team_name: r2.team_name,
+            team_color: r2.team_color
+        };
+
+        res.json({ success: true, data: updatedPlayer });
     } catch (error) {
         res.status(500).json({
             error: true,
@@ -208,7 +267,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete player
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
     try {
         const db = req.app.locals.db;
         
@@ -222,8 +281,18 @@ router.delete('/:id', async (req, res) => {
             });
         }
         
-        // Delete player
+        // Delete player (and images folder best-effort)
         await db.run('DELETE FROM players WHERE id = ?', [req.params.id]);
+        try {
+            const path = require('path');
+            const fs = require('fs');
+            const dir = path.join(__dirname, '..', 'uploads', 'images', req.params.id);
+            if (fs.existsSync(dir)) {
+                fs.rmSync(dir, { recursive: true, force: true });
+            }
+        } catch (e) {
+            console.warn('Failed to remove player image folder:', e.message);
+        }
         
         res.json({
             success: true,

@@ -164,6 +164,14 @@ class DataManager {
             },
             ...options
         };
+        // Attach auth token if present
+        try {
+            const token = sessionStorage.getItem('teamsite_token');
+            if (token) {
+                config.headers = config.headers || {};
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
+        } catch (_) {}
 
         try {
             const response = await fetch(url, config);
@@ -226,7 +234,23 @@ class DataManager {
     async loadPlayers() {
         try {
             const response = await this.apiCall('/players');
-            this.data.players = response.data || [];
+            // Ensure adapter mapping exists even if backend already mapped
+            const rows = response.data || [];
+            this.data.players = rows.map(p => ({
+                id: p.id,
+                name: p.name,
+                number: p.number,
+                teamId: p.teamId ?? p.team_id,
+                position: p.position,
+                image: p.image ?? p.image_path,
+                bio: p.bio,
+                battingAverage: p.battingAverage ?? p.batting_average ?? 0,
+                homeRuns: p.homeRuns ?? p.home_runs ?? 0,
+                rbi: p.rbi ?? 0,
+                gamesPlayed: p.gamesPlayed ?? p.games_played ?? 0,
+                createdAt: p.createdAt ?? p.created_at,
+                updatedAt: p.updatedAt ?? p.updated_at
+            }));
         } catch (error) {
             console.warn('Failed to load players, using empty array');
             this.data.players = [];
@@ -323,9 +347,24 @@ class DataManager {
         }
 
         try {
+            // Map UI -> API shape
+            const payload = {
+                name: playerData.name,
+                number: playerData.number,
+                teamId: playerData.teamId,
+                position: playerData.position,
+                image: playerData.image || null,
+                bio: playerData.bio || null,
+                stats: {
+                    battingAverage: playerData.battingAverage || 0,
+                    homeRuns: playerData.homeRuns || 0,
+                    rbi: playerData.rbi || 0,
+                    gamesPlayed: playerData.gamesPlayed || 0
+                }
+            };
             const response = await this.apiCall('/players', {
                 method: 'POST',
-                body: JSON.stringify(playerData)
+                body: JSON.stringify(payload)
             });
             
             const player = response.data;
@@ -353,9 +392,23 @@ class DataManager {
         }
 
         try {
+            const payload = {
+                name: updates.name,
+                number: updates.number,
+                teamId: updates.teamId,
+                position: updates.position,
+                image: updates.image,
+                bio: updates.bio,
+                stats: {
+                    battingAverage: updates.battingAverage,
+                    homeRuns: updates.homeRuns,
+                    rbi: updates.rbi,
+                    gamesPlayed: updates.gamesPlayed
+                }
+            };
             const response = await this.apiCall(`/players/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify(updates)
+                body: JSON.stringify(payload)
             });
             
             const updatedPlayer = response.data;

@@ -15,6 +15,11 @@
     <script src="js/validation.js"></script>
     <script src="js/data-manager.js"></script>
     <style>
+        :root {
+            --color-primary: #3b82f6;
+            --color-secondary: #10b981;
+            --color-accent: #f59e0b;
+        }
         .grading-slab {
             background: rgba(255, 255, 255, 0.8);
             border: 15px solid rgba(255, 255, 255, 0.3);
@@ -202,6 +207,14 @@
             document.querySelector('h1').textContent = `Meet Our Team`;
             document.querySelector('p').textContent = config.description;
 
+            // Apply theme colors as CSS variables
+            if (config && config.theme) {
+                const root = document.documentElement;
+                root.style.setProperty('--color-primary', config.theme.primary);
+                root.style.setProperty('--color-secondary', config.theme.secondary);
+                root.style.setProperty('--color-accent', config.theme.accent);
+            }
+
             // Update season schedule
             updateSeasonSchedule(config.season);
         }
@@ -302,7 +315,8 @@
             
             // Get team info for styling
             const team = dataManager.getTeam(player.teamId);
-            const teamColor = team ? parseInt(team.color.replace('#', '0x')) : 0x3b82f6;
+            const themePrimary = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#3b82f6';
+            const teamColor = parseInt((team ? team.color : themePrimary).replace('#', '0x'));
             
             // Card front with fallback image
             const cardGeometry = new THREE.BoxGeometry(width, height, depth);

@@ -8,11 +8,13 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
+const { requireAuth } = require('../auth');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '..', 'uploads', 'images');
+        const playerId = req.body.playerId || 'unknown';
+        const uploadDir = path.join(__dirname, '..', 'uploads', 'images', playerId);
         // Ensure directory exists
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
@@ -20,18 +22,17 @@ const storage = multer.diskStorage({
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-        // Generate unique filename: playerId_timestamp.extension
-        const playerId = req.body.playerId || 'unknown';
+        // Generate unique filename: uuid.extension (timestamp included)
         const timestamp = Date.now();
         const ext = path.extname(file.originalname);
-        cb(null, `${playerId}_${timestamp}${ext}`);
+        cb(null, `${timestamp}${ext}`);
     }
 });
 
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 2 * 1024 * 1024 // 2MB limit
+        fileSize: 5 * 1024 * 1024 // 5MB limit
     },
     fileFilter: (req, file, cb) => {
         // Check file type
@@ -48,7 +49,7 @@ const upload = multer({
 });
 
 // Upload single image
-router.post('/image', upload.single('image'), (req, res) => {
+router.post('/image', requireAuth, upload.single('image'), (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -58,8 +59,9 @@ router.post('/image', upload.single('image'), (req, res) => {
             });
         }
         
+        const playerId = req.body.playerId || 'unknown';
         // Return the file path relative to the uploads directory
-        const filePath = `/uploads/images/${req.file.filename}`;
+        const filePath = `/uploads/images/${playerId}/${req.file.filename}`;
         
         res.json({
             success: true,

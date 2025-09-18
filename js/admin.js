@@ -10,6 +10,32 @@ let colorPickers = {};
 
 // Initialize admin panel
 document.addEventListener('DOMContentLoaded', async function() {
+    // Auth gate
+    const token = sessionStorage.getItem('teamsite_token');
+    if (!token) {
+        const pw = prompt('Admin password');
+        if (!pw) {
+            alert('Authentication required');
+            return;
+        }
+        try {
+            const resp = await fetch('http://localhost:3000/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw })
+            });
+            if (!resp.ok) throw new Error('Login failed');
+            const json = await resp.json();
+            if (json && json.data && json.data.token) {
+                sessionStorage.setItem('teamsite_token', json.data.token);
+            } else {
+                throw new Error('Invalid login response');
+            }
+        } catch (e) {
+            alert('Login failed');
+            return;
+        }
+    }
     // Initialize feather icons
     feather.replace();
     
@@ -206,18 +232,48 @@ function handlePlayerSubmit(e) {
     
     // Handle image upload
     const imageFile = formData.get('playerImage');
-    if (imageFile && imageFile.size > 0) {
-        Utils.fileToBase64(imageFile).then(base64 => {
-            playerData.image = base64;
-            savePlayer(playerData);
-        }).catch(error => {
-            Utils.showNotification('Error processing image: ' + error.message, 'error');
-        });
-    } else if (currentEditingPlayer && currentEditingPlayer.image) {
-        playerData.image = currentEditingPlayer.image;
-        savePlayer(playerData);
+    if (currentEditingPlayer) {
+        // Edit flow
+        if (imageFile && imageFile.size > 0) {
+            await uploadPlayerImage(imageFile, { ...playerData, id: currentEditingPlayer.id });
+        } else {
+            await savePlayer(playerData);
+        }
     } else {
-        savePlayer(playerData);
+        // Create flow (two-step)
+        const created = await dataManager.addPlayer({ ...playerData, image: null });
+        if (imageFile && imageFile.size > 0) {
+            await uploadPlayerImage(imageFile, { ...created });
+        }
+    }
+}
+
+async function uploadPlayerImage(imageFile, playerData) {
+    try {
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        formData.append('playerId', playerData.id || 'new');
+        
+        const response = await fetch('http://localhost:3000/api/upload/image', {
+            method: 'POST',
+            headers: (() => { const h = {}; const t = sessionStorage.getItem('teamsite_token'); if (t) h['Authorization'] = `Bearer ${t}`; return h; })(),
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            playerData.image = result.data.path; // Use the file path
+            await savePlayer(playerData);
+        } else {
+            throw new Error(result.message || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('Image upload error:', error);
+        Utils.showNotification('Error uploading image: ' + error.message, 'error');
     }
 }
 
@@ -235,6 +291,25 @@ async function savePlayer(playerData) {
         Utils.showNotification('Error saving player: ' + error.message, 'error');
         showFormErrors('playerForm', error.message);
     }
+}
+
+function getPlayerImageUrl(image) {
+    if (!image) {
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyMEMyNi4wNzcgMjAgMzEuMTExIDE0Ljk1NiAzMS4xMTEgOC44ODlDMzEuMTExIDIuODIyIDI2LjA3NyAtMi4yMjIgMjAgLTIuMjIyQzEzLjkyMyAtMi4yMjIgOC44ODkgMi44MjIgOC44ODkgOC44ODlDOC44ODkgMTQuOTU2IDEzLjkyMyAyMCAyMCAyMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTIwIDI0QzE0LjQ3NyAyNCA5Ljk0NCAyNi4yMjIgNi42NjcgMjkuNUMyLjIyMiAzMy45NDQgMCAzOS40NDQgMCA0NUg0MEM0MCAzOS40NDQgMzcuNzc4IDMzLjk0NCAzMy4zMzMgMjkuNUMyOS4wNTYgMjYuMjIyIDI0LjUyMyAyNCAyMCAyNFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
+    }
+    
+    // If it's a base64 data URL, return as-is
+    if (image.startsWith('data:')) {
+        return image;
+    }
+    
+    // If it's a file path, prepend the base URL
+    if (image.startsWith('/uploads/')) {
+        return `http://localhost:3000${image}`;
+    }
+    
+    // If it's already a full URL, return as-is
+    return image;
 }
 
 function loadPlayersList() {
@@ -266,7 +341,7 @@ function loadPlayersList() {
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0 h-10 w-10">
-                                            <img class="h-10 w-10 rounded-full object-cover" src="${player.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyMEMyNi4wNzcgMjAgMzEuMTExIDE0Ljk1NiAzMS4xMTEgOC44ODlDMzEuMTExIDIuODIyIDI2LjA3NyAtMi4yMjIgMjAgLTIuMjIyQzEzLjkyMyAtMi4yMjIgOC44ODkgMi44MjIgOC44ODkgOC44ODlDOC44ODkgMTQuOTU2IDEzLjkyMyAyMCAyMCAyMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTIwIDI0QzE0LjQ3NyAyNCA5Ljk0NCAyNi4yMjIgNi42NjcgMjkuNUMyLjIyMiAzMy45NDQgMCAzOS40NDQgMCA0NUg0MEM0MCAzOS40NDQgMzcuNzc4IDMzLjk0NCAzMy4zMzMgMjkuNUMyOS4wNTYgMjYuMjIyIDI0LjUyMyAyNCAyMCAyNFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+'}">
+                                            <img class="h-10 w-10 rounded-full object-cover" src="${getPlayerImageUrl(player.image)}">
                                         </div>
                                         <div class="ml-4">
                                             <div class="text-sm font-medium text-gray-900">${player.name}</div>
@@ -327,11 +402,9 @@ function handleImagePreview(e) {
             return;
         }
         
-        Utils.fileToBase64(file).then(base64 => {
-            document.getElementById('imagePreview').src = base64;
-        }).catch(error => {
-            Utils.showNotification('Error processing image: ' + error.message, 'error');
-        });
+        // Create preview URL for the selected file
+        const previewUrl = URL.createObjectURL(file);
+        document.getElementById('imagePreview').src = previewUrl;
     }
 }
 
@@ -486,6 +559,14 @@ function loadSettings() {
     document.getElementById('startDate').value = Utils.formatDateForInput(config.season.startDate);
     document.getElementById('endDate').value = Utils.formatDateForInput(config.season.endDate);
     document.getElementById('allStarDate').value = Utils.formatDateForInput(config.season.allStarWeekend);
+
+    // Apply theme variables to page
+    if (config && config.theme) {
+        const root = document.documentElement;
+        root.style.setProperty('--color-primary', config.theme.primary);
+        root.style.setProperty('--color-secondary', config.theme.secondary);
+        root.style.setProperty('--color-accent', config.theme.accent);
+    }
 }
 
 async function handleSettingsSubmit(e) {
@@ -521,21 +602,26 @@ function loadDataStats() {
     const data = dataManager.data;
     const container = document.getElementById('dataStats');
     
+    // Safely get data with fallbacks
+    const playersCount = data.players ? data.players.length : 0;
+    const teamsCount = data.teams ? data.teams.length : 0;
+    const lastUpdated = data.siteConfig ? data.siteConfig.updated_at : 'Never';
+    
     container.innerHTML = `
         <div class="bg-blue-50 p-4 rounded-lg">
-            <div class="text-2xl font-bold text-blue-600">${data.players.length}</div>
+            <div class="text-2xl font-bold text-blue-600">${playersCount}</div>
             <div class="text-sm text-blue-800">Players</div>
         </div>
         <div class="bg-green-50 p-4 rounded-lg">
-            <div class="text-2xl font-bold text-green-600">${data.teams.length}</div>
+            <div class="text-2xl font-bold text-green-600">${teamsCount}</div>
             <div class="text-sm text-green-800">Teams</div>
         </div>
         <div class="bg-purple-50 p-4 rounded-lg">
-            <div class="text-2xl font-bold text-purple-600">${data.events.length}</div>
-            <div class="text-sm text-purple-800">Events</div>
+            <div class="text-2xl font-bold text-purple-600">${data.siteConfig ? '1' : '0'}</div>
+            <div class="text-sm text-purple-800">Site Config</div>
         </div>
         <div class="bg-orange-50 p-4 rounded-lg">
-            <div class="text-2xl font-bold text-orange-600">${Utils.formatDate(data.lastUpdated)}</div>
+            <div class="text-2xl font-bold text-orange-600">${Utils.formatDate(lastUpdated)}</div>
             <div class="text-sm text-orange-800">Last Updated</div>
         </div>
     `;
